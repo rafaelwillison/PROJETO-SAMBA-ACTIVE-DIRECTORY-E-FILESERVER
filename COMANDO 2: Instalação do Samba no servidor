@@ -1,0 +1,119 @@
+2.1. Atualização do sistema e Instalação das dependências do samba 4.x - Ubuntu Server 20.04:
+apt-get update && apt-get upgrade -y
+apt-get install wget acl attr autoconf bind9utils bison build-essential debhelper dnsutils docbook-xml docbook-xsl flex gdb libjansson-dev krb5-user libacl1-dev libaio-dev libarchive-dev libattr1-dev libblkid-dev libbsd-dev libcap-dev libcups2-dev libgnutls28-dev libgpgme-dev libjson-perl libldap2-dev libncurses5-dev libpam0g-dev libparse-yapp-perl libpopt-dev libreadline-dev nettle-dev perl pkg-config python-all-dev python-crypto python2-dbg python-dev python-dnspython python3-dnspython python3-gpg python-markdown python3-markdown python3-dev xsltproc zlib1g-dev liblmdb-dev lmdb-utils libsystemd-dev perl-modules-5.* libdbus-1-dev libtasn1-bin -y
+
+2.2. Baixar o código fonte do samba e extrair o conteúdo do arquivo:
+cd /usr/src/ && wget -c
+https://download.samba.org/pub/samba/stable/samba-4.9.4.tar.gz &&
+tar -xf samba-4.9.4.tar.gz && cd samba-4.9.4
+
+2.3. Configurando e compilando e instalando o serviço samba:
+./configure --with-systemd --prefix=/usr/local/samba --enable-fhs
+make 
+make install
+
+2.4.Movendo os comando samba-tool no bash para o diretório /root/.bashrc
+	cd /usr/src/samba-4.9.4
+echo "PATH=$PATH:/usr/local/samba/bin:/usr/local/samba/sbin" >> /root/.bashrc
+source /root/.bashrc
+which samba-tool (pesquisar local)
+samba-tool --help
+
+Configurando unidade de serviço SystemD para serviço samba
+
+3.1. Copia o arquivo e renomear. Importante para iniciar samba
+cp -v /usr/src/samba-4.9.4/bin/default/packaging/ systemd/samba.service /etc/systemd/system/samba-ad-dc.service
+
+3.2. Criar o diretório Sysconfig
+mkdir -v /usr/local/samba/etc/sysconfig
+
+3.3. Criar o arquivo samba dentro do diretório sysconfig
+vim -v /usr/local/samba/etc/sysconfig/samba
+
+3.4. Inserir no arquivo samba o paramento   
+SAMBAOPTIONS="-D"
+
+3.5. Reload e enable
+systemctl daemon-reload
+systemctl enable samba-ad-dc.service
+
+
+SEÇÃO 2: Provisionando o Domínio
+
+Criando o Domínio - Servidor Samba na função Active Directory Domain Controller
+
+3.1. Ajustes iniciais.
+systemclt stop systemd-resolved.service
+systemclt disable systemd-resolved.service
+nmtui : Inserir os dns 10.10.10.11 10.10.10.12
+systemclt restart NetwordManager.service
+cat /etc/resolv.conf
+ls -l /etc/hosts  Configurar FQDN dentro desse arquivo inserindo as configurações do FQDN (Fully Qualified Domain Name)
+vim /etc/hosts
+127.0.0.1 localhost
+10.10.10.11 srvdc1.hydra.com.br srvdc1
+cat /etc/hosts  -  Checar as alterações
+hostname -f    Identifica FQDN.
+
+3.2. Criando o Domínio Novo
+samba-tool domain provision --use-rfc2307 --domain=HYDRA --realm=HYDRA.COM.BR
+3.3. Alterar a Senha do usuário administrator
+samba-tool user setpassword administrator
+
+3.4. Copiar o  arquivos krb5 para o diretório /etc
+		ls -l /usr/local/samba/var/lib/samba/private/krb5.conf
+cat /usr/local/samba/var/lib/samba/private/krb5.conf
+cp -bv /usr/local/samba/var/lib/samba/private/krb5.conf   /etc/krb5.conf
+
+3.5. Iniciar a unidade de serviço samba-ad-dc.service
+systemctl start samba-ad-dc.service
+systemctl status samba-ad-dc.service
+
+Configurando um DNS Forwarder
+Configuração para o servidor samba seja encaminhador DNS. Possibilitando a resolução de nomes de domínio externos.
+
+dig a srvdc1.hydra.com.br  Verificar se resolve dominios internos.
+dig a www.google.com Verificar se resolve dominios externos.
+vim /usr/local/samba/etc/samba/smb.conf
+dns forwarder = 8.8.8.8   Editar linha, inserir dns externos.
+testparm Comando para testar os paramentos dos arquivos dentro smb.conf
+systemctl restart samba-ad-dc.service
+systemctl status samba-ad-dc.service
+dig a www.google.com Verificar se resolve dominios externos.
+
+Instalando e Configurando serviço NTP
+
+Configuração de sincronização de data e hora automaticamente
+apt-get update
+apt-get install chrony -y
+vim /etc/chrony/chrony.conf
+
+Comentar linhas que permitem consultas nos servidores Ubuntu
+#pool ntp.ubuntu.com         iburst maxsouces 4
+#pool 0.ubuntu.pool.ntp.org  iburst maxsouces 1
+#pool 1.ubuntu.pool.ntp.org  iburst maxsouces 1
+#pool 2.ubuntu.pool.ntp.org  iburst maxsouces 2
+
+Permitir consulta aos servidores NTP do Brasil
+server a.ntp.br iburst
+server b.ntp.br iburst
+server c.ntp.br iburst
+
+Controle de acesso ao servidor NTP chrony: Permitir consultas a partir de...
+allow 10.10.10.0/24
+allow 127.0.0.1
+
+Finalizando
+systemctl restart chrony.service
+systemctl status chrony.service
+systemctl enabled chrony.service
+systemctl is-enabled chrony.service
+
+Observação: Desabilitar o serviço systemd-timesyncd.service
+systemctl status  systemd-timesyncd.service
+systemctl desable  systemd-timesyncd.service
+systemctl stop  systemd-syncd.service
+
+Verificar se o serviço chrony está em execução
+chronyc sources
+watch -n1 chronyc sources
