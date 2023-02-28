@@ -1,6 +1,5 @@
-SEÇÃO 1: Instalação do servidor Samba
-
 # Configuração da Interface de placa de rede
+
 #Criação da Senha user root:
 sudo su -  (Acesso via root)
 whoami  (Checar user logado)
