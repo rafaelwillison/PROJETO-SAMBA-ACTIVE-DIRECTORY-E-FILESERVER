@@ -1,0 +1,48 @@
+Promovendo Servidor Samba a Domain Controller em um Domínio Existente
+
+Para unidade de serviço systemd-resolved.service:
+systemctl stop systemd-resolved.service
+systemctl disable systemd-resolved.service
+
+Editar arquivo /etc/resolv.conf: Caso ñ esteje usando o NetworkManager.
+rm -vf /etc/resolv.conf
+vim /etc/resolv.conf
+
+Inserir no arquivo /etc/resolv.conf:
+nameserver 10.10.10.11
+nameserver 10.10.10.12
+search hydra.com.br
+
+Editar arquivo /etc/krb5.conf
+vim /etc/krb5.conf
+
+Conteúdo do arquivo /etc/krb5.conf deve ficar como mostrado a seguir:
+[libdefaults]
+default_realm = EMPRESA.LOCAL
+dns_lookup_realm = false
+dns_lookup_kdc = true
+OBS: Comando dG apaga tudo do cusor para baixo no editor vim.
+
+Testar comunicação com Controlador de Domínio Samba
+kinit administrator
+klist
+kdestroy
+
+Ingressando servidor samba como controlador de domínio:
+samba-tool domain join hydra.com.br DC --dns-backend=SAMBA_INTERNAL -U "HYDRA\administrator"
+
+Editar arquivo /etc/resolv.conf - Conteúdo do arquivo /etc/resolv.conf deve ficar como mostrado abaixo:
+vim /etc/resolv.conf
+nameserver 10.10.10.12
+nameserver 10.10.10.11
+systemctl restart NetworkManager.service
+
+Editar arquivo smb.conf para resolver DNS externos-Conteúdo do arquivo smb.conf deve ficar como mostrado abaixo:
+vim /usr/local/samba/etc/samba/smb.conf
+dns forwarder = 8.8.8.8 - Editar linha, inserir dns externos.
+
+Habilitando serviço samba para inicializar durante o boot do sistema
+systemctl restart samba-ad-dc.service
+systemctl enable samba-ad-dc.service
+
+
